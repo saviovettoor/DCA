@@ -1,0 +1,151 @@
+#Image Creation, Management, and Registry
+
+Content may include the following:
+● Describe Dockerfile options [add, copy, volumes, expose, entrypoint, etc)
+	FROM -> base image from docker hub or a tarfile, which should be the first statement
+	LABEL/MAINTAINER -> who maintaine the image
+	COPY -> Work only with files and Folder
+	ADD -> Work with files, Folders and URLS
+	VOLUME -> Create a mount point
+	RUN -> run a command in root privilage
+	ENV -> Setting an enviroment variable, which will be system wide enviroment variable. 
+	ARG -> Only the one which can come before FROM but then arg value can be used only by FROM
+	EXPOSE -> expose a port.
+	USER -> To specfyig an entry point user, what all command specfyig after this will be executed as the USER which you specfy and what all above that will be run as privilage user.
+	CMD -> only run when the container is created(not start/restart), can be override CMD by passing value when you run a container.
+	ENTRYPOINT -> configures a container that will run as an executable..
+● Show the main parts of a Dockerfile
+● Give examples on how to create an efficient image via a Dockerfile
+	“ephemeral”- mean that the container can be stopped and destroyed, then rebuilt and replaced with an absolute minimum set up and configuration.
+	build context
+	Minimize the number of layers
+● Use CLI commands such as list, delete, prune, rmi, etc to manage images
+	#listout docker images
+		docker images
+		docker image ls
+	#display image with details long image ID
+		docker images --digests
+	#display image with details long image ID
+		docker images --no-trunc
+	#Remove an image
+		docker image rm <ImageID>
+	#Remove all stoped container images
+		docker rm `docker ps -a -q`
+	#Remove an image even if there are containers based on it
+		docker image rmi --force <ImageID/ImageName>
+	PRUNE
+		#Remove all stopped containers,networks not used by at least one container,  dangling images and  build cache.
+			docker system prune
+		#-a Remove all unused images not just dangling ones
+			docker system prune -a 
+		#Prune volumes
+			docker system prune -a --volumes 
+		#Note - This wont clear anything of docker swarm.
+● Inspect images and report specific attributes using filter and format
+	#Display detailed information on one or more images
+		docker image inspect <IMAGEID/NAME>
+	#Using filter in inspect
+		docker image inspect --format="{{.Metadata}}" centos
+		docker image inspect centos --format="{{json .GraphDriver}}"
+	#Format the image list output
+		 docker images --format "{{.ID}}: {{.Repository}}"
+	Placeholder		Description
+	  .ID			Image ID
+	  .Repository	Image repository
+	  .Tag			Image tag
+	  .Digest		Image digest
+	  .CreatedSince	Elapsed time since the image was created
+	  .CreatedAt	Time when the image was created
+	  .Size			Image disk size
+● Demonstrate tagging an image
+	#taging centos:6 to mycentos:v1
+	docker tag centos:6 mycentos:v1 
+		#centos:6 to mycentos:v1 both will have same image ID
+		#when you remove centos:6 which wont remove mycentos:v1 or the base image it will just untag the image
+	#Untag a docker image
+		docker image rm mycentos:v1
+● Utilize a registry to store an image
+	#Push an image or a repository to a registry
+		docker image push <ImageName>
+	#Skip image signing
+		docker image push --disable-content-trust=true <ImageName>
+● Display layers of a Docker image
+	#Show the history of an image
+		docker image history [OPTIONS] IMAGE
+● Apply a file to create a Docker image
+	#Build using Dockerfile in current directory
+		docker image build -t myimage:v1 .
+	#Building using git 
+		docker image build -t myimage:v1 https://github.com/madflojo/automatron.git
+	#Build docker image using Dockerfile2 in current directory
+		docker build -t mycustomeimage:v2 -f Dockerfile2 .							
+● Modify an image to a single layer
+	#create image with single layer(--squash) *you need to enable experiment feature in docker deamon.# --no-cache  dont use image in local
+		docker build --pull --no-cache --squash -t mysquashedimage:v1 
+	#export a container
+		docker export <container_name> > my_exported_container.tar 
+		docker import my_exported_container.tar myimage:v2 #importing an exported container
+● Describe how image layers work
+	#To view a running container size
+		docker ps -s
+	NOTE:
+		The <missing> lines in the docker history output indicate that those layers were built on another system and are not available locally.
+		The major difference between a container and an image is the top of container there is writable layer.
+		More-https://medium.com/@jessgreb01/digging-into-docker-layers-c22f948ed612
+● Deploy a registry (not architect)
+		yum install openssl
+		mkdir /opt/certs
+		mkdir /opt/auth
+		
+		openssl req -newkey rsa:4096 -nodes -sha256 -keyout /opt/certs/dockerrepo.key -x509 -days 365 -out /opt/certs/dockerrepo.crt -subj /CN=myregistrydomain.com
+		mkdir /etc/certs.d/myregistrydomain:5000
+		cp /opt/certs/dockerrepo.crt /etc/certs.d/myregistrydomain:5000/ca.crt #To make certificate is trusted
+		docker pull registry:2
+		docker run --entrypoint htpasswd registry:2 -Bbn test password@123 > /opt/auth/htpasswd
+		docker run -d -p 5000:5000 -v /opt/certs:/certs -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/dockerrepo.crt  -e REGISTRY_HTTP_TLS_KEY=/certs/dockerrepo.key -v /opt/auth:/auth -e REGISTRY_AUTH=htpasswd -e REGISTRY_AUTH_HTPASSWD_REALM="Registry Realm" -e REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd registry:2
+● Configure a registry
+	Create a new configuration file from scratch,named config.yml, then specify it in the docker run command:
+		docker run -d -p 5000:5000 --restart=always --name registry -v `pwd`/config.yml:/etc/docker/registry/config.yml registry:2
+	MORE - https://docs.docker.com/registry/configuration/
+● Log into a registry
+	#Login
+		docker login [OPTIONS] [SERVER]
+	#Login to a self-hosted registry
+		docker login myregistry:8080 -u savio -p password@123
+	#Provide a password using STDIN
+		 cat ~/my_password.txt | docker login --username foo --password-stdin
+● Utilize search in a registry
+	#Search apache image in docker hub and list out
+		docker search apache
+	#Search apache image in docker hub and list out
+		docker search apache
+	#Search apache image in docker hub and list out with 50=> star
+		docker search --filter stars=50 apache
+	#Search apache image in docker hub and list out with 50+ star amd official image
+		docker search --filter stars=50 --filter is-official=true apache
+	#limit display of 10 images	(by default 25)
+		docker search  --limit 10 apache
+● Sign an image in a registry
+	Docker Content Trust (DCT) 
+	#Enable Docker content trust then untrusted certificate authority wont work 
+		export DOCKER_CONTENT_TRUST=1
+● Pull an image from a registry
+	#which wil pull latest taged image which is default
+		docker pull hello-world
+	#Pull all taged images
+		docker pull -a hello-world 
+	#Pull down a non-trusted image by docker registry
+		docker pull --disabled-content-trust hello-world 
+	#Pulling a specific is tag image (cnetos6)
+		docker pull centos:6
+● Describe how image deletion works
+	#Remove all running docker container
+		docker rm -f $(docker ps -qf status=running)
+	#Remove all stoped container images
+		docker rm `docker ps -a -q`
+	#Delete all Docker Images
+		docker rmi $(docker images -q)
+	Docker’s intermediate images maintenance. These are the “<none> <none>” images located in docker images -a 
+	docker images. These are the “<none> <none>” ,You can use docker rmi $(docker images -f “dangling=true" -q) or docker images prune -a to clean these up.
+● Delete an image from a registry
+	You can use webconsole
