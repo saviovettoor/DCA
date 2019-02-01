@@ -1,0 +1,67 @@
+#Networking (15% of exam)
+● Network Driver Types
+	Bridge
+		• Simple to understand, use and troubleshoot, and is the default on stand-alone Docker hosts.
+		• Consists of a private network that is internal to the host system; all containers implemented on this host using Bridge networking can communicate.
+		• External access is granted by port exposure of the container’s services and accessed by the host OR static routes added with the host as the gateway for that network.
+	None
+		• Used when the container(s) in question need absolutely no networking access at all.
+		• Containers operating on this driver can only be accessed on the host they are running on.
+		• These containers can be attached directly (using ‘docker attach [containerid]’) or executing by another command on the running container (using ‘docker exec -it [containerid] [command]).
+		• Not commonly used.
+	Host
+		• Sometimes referred to as ‘Host Only Networking’.
+		• Only accessible via the underlying host.
+		• Access to services can only be provided by exposing container service ports to the host system.
+	Overlay
+		• Allows communication among all Docker Daemons that are participating in a Swarm.
+		• It is a ‘Swarm Scope’ driver in that it extends itself (building previously non-existent networks on Workers if needed) to all daemons in the Swarm cluster.
+		• Allows the communication of multiple services that may have replicas running on any number of Workers in the Swarm, regardless of their origination or destination.
+		• Default mode of Swarm communication.
+	Ingress
+		• Special overlay network that load balances network traffic amongst a given service’s working nodes.
+		• Maintains a list of all IP addresses from nodes that participate in that service (using the IPVS module) and when a request comes in, routes to one of them for the indicated service.
+		• Provides the ‘routing mesh’ that allows services to be exposed to the external network without having a replica running on every node in the Swarm.
+	Docker Gateway Bridge
+		• Special bridge network that allows overlay networks (including Ingress) access to an individual Docker daemon’s physical network.
+		• Every container run within a service is connected to the local Docker daemon’s host network.
+		• Automatically created when a Swarm is initialized or joined.
+● Create a Docker bridge network for a developer to use for their containers
+		#List out network
+			docker network ls
+		#Create a docker network
+			docker network create --driver=bridge --subnet=192.168.1.0/24 --gateway=192.168.1.250 --opt "com.docker.network.driver.mtu"="1501" my_bridge 
+		#To view more detail about the network 
+			docker network inspect my_bridge
+		# will be running on default bridge network
+			docker run -d --name testweb -p 80:80 httpd
+		#Get IP of the container
+			docker container inspect --format="{{.NeteorkSettings.Networks.bridge.IPAddress}}" testweb
+		#Connect my running app to new bridge network, now the app will have two IPs
+			docker network connect --ip=192.168.1.10 my_bridge testweb 
+		#Disconnect the default network
+			docker network disconnect bridge testweb
+		#Add the service to new network
+			 docker run -d --name testweb -p 80:80 --network my_bridge httpd
+● Troubleshoot container and engine logs to understand a connectivity issue betweencontainers
+	https://docs.docker.com/docker-for-windows/troubleshoot/
+● Publish a port so that an application is accessible externally
+	Docker level
+		docker run -d --name=myweb -P nginx:latest #exposeing port to host machine based on expose which is mentioned in dockerfile
+		docker run -d --name=myweb -p 8080:80 nginx:latest #bind to specific localport 8080
+		docker run -d --name=myweb --publish 8080:80/udp nginx:latest #bind to specific localport 8080 only 80/UDP
+		docker run -d --name=myweb -p 127.0.0.1:8080:80/udp nginx:latest #bind to specific local interface 127.0.0.1:8080 not other
+	Docker Swarm
+		docker service create --name my_web --replicas 3 --publish 8080:80 nginx
+● Identify which IP and port a container is externally accessible on
+	#List out the running containers
+		docker ps
+	#get the published port for service testweb
+		docker port testweb
+● Describe the different types and use cases for the built-in network drivers
+● Understand the Container Network Model and how it interfaces with the Docker engine and network and IPAM drivers
+● Configure Docker to use external DNS
+● Use Docker to load balance HTTP/HTTPs traffic to an application (Configure L7 load balancing with Docker EE)
+● Understand and describe the types of traffic that flow between the Docker engine, registry, and UCP controllers
+● Deploy a service on a Docker overlay network
+● Describe the difference between "host" and "ingress" port publishing mode
