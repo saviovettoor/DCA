@@ -26,6 +26,8 @@
 		• Special bridge network that allows overlay networks (including Ingress) access to an individual Docker daemon’s physical network.
 		• Every container run within a service is connected to the local Docker daemon’s host network.
 		• Automatically created when a Swarm is initialized or joined.
+	macvlan: 
+		Macvlan networks allow you to assign a MAC address to a container, making it appear as a physical device on your network. The Docker daemon routes traffic to containers by their MAC addresses. Using the macvlan driver is sometimes the best choice when dealing with legacy applications that expect to be directly connected to the physical network, rather than routed through the Docker host’s network stack. 
 ● Create a Docker bridge network for a developer to use for their containers
 		#List out network
 			docker network ls
@@ -59,9 +61,39 @@
 	#get the published port for service testweb
 		docker port testweb
 ● Describe the different types and use cases for the built-in network drivers
+	- Most commonly used built-in network drivers are bridge, overlay and macvlan
+	- The bridge driver is a local scope driver, which means it only provides service discovery, IPAM, and connectivity on a single host. Multi-host service discovery requires an external solution that can map containers to their host location. This is exactly what makes the overlay driver so great.
+	- MACVLAN use-cases may include:
+		Very low-latency applications
+		Network design that requires containers be on the same subnet as and using IPs as the external host network
 ● Understand the Container Network Model and how it interfaces with the Docker engine and network and IPAM drivers
+	https://success.docker.com/article/networking
 ● Configure Docker to use external DNS
+	- By default when starting a container it will be using host DNS
+	- we can veryfy the same by checking resolve.conf file of container
+	#Set a dns for container	
+		docker run -d --name testweb --dns=8.8.8.8 --dns=8.8.4.4 httpd 
+	Set a custom dns when a container start
+		vi /etc/docker/daemon.json
+			{
+				"dns":["8.8.8.8","8.8.4.4"]
+			}
+		systemctl restart docker
 ● Use Docker to load balance HTTP/HTTPs traffic to an application (Configure L7 load balancing with Docker EE)
 ● Understand and describe the types of traffic that flow between the Docker engine, registry, and UCP controllers
+	The traffic between DTR and UCP is always encrypted to ensure security. Traffic between containers is not encrypted by default. DTR / UCP management traffic used Mutual TLS
 ● Deploy a service on a Docker overlay network
+	#Create an overlay network
+		docker network create --driver=overlay --subnet=192.168.1.0/24 --gateway=192.168.1.100 myoverlay0
+	#view the details of network you created	
+		docker network inspect myoverlay0
+	#Create service on overlay network you created
+		docker service create --name testweb -p 80:80 --network=myoverlay0 --replicas 3 httpd
 ● Describe the difference between "host" and "ingress" port publishing mode
+	Two types of port publishing modes:
+		• Host
+			• Ports for containers are only available on the underlying host system and are NOT available for services outside of the host where that instance exists.
+			• Used in single host environments or in environments where you need complete control over routing.
+			• You are responsible for knowing where all instances are at all times, controlled with ‘mode=host’ in deployment.
+		• Ingress
+			• Since it is responsible for ‘routing mesh’, it makes all published ports available on all hosts (nodes or Workers) participating in the cluster so that the service is accessible from every node regardless of whether there is a service replica running on it at any given time.
