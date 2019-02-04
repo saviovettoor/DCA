@@ -33,7 +33,39 @@
 	The swarm mode public key infrastructure (PKI) system built into Docker makes it simple to securely deploy a container orchestration system. 
 	The nodes in a swarm use mutual Transport Layer Security (TLS) to authenticate, authorize, and encrypt the communications with other nodes in the swarm.
 	https://docs.docker.com/engine/swarm/how-swarm-mode-works/pki/
-● Describe MTLS
+● Describe MTLS(Mutually Authenticated TLS )
+	- Mutually Authenticated TLS is the implementation that was chosen to secure that communication. Any time a swarm is initialized, a self-signed Certificate Authority (CA) is generated and issues certificates to every node (manager or worker) to facilitate those secure communications.
+	- Using TLS (Transport Layer Security) provides both privacy and data integrity in communications within the swarm.
+	https://diogomonica.com/2017/01/11/hitless-tls-certificate-rotation-in-go/
 ● Identity roles
+	UCP administrators view and manage roles by navigating to the Roles page.
+	The system provides the following default roles:
+	- None	The user has no access to swarm resources. This maps to the No Access role in UCP 2.1.x.
+	- View Only	The user can view resources like services, volumes, and networks but can’t create them.
+	- Restricted Control	The user can view and edit volumes, networks, and images but can’t run a service or container in a way that might affect the node where it’s running. The user can’t mount a node directory and can’t exec into containers. Also, The user can’t run containers in privileged mode or with additional kernel capabilities.
+	- Scheduler	The user can view nodes and schedule workloads on them. Worker nodes and manager nodes are affected by Scheduler grants. Having Scheduler access doesn’t allow the user to view workloads on these nodes. They need the appropriate resource permissions, like Container View. By default, all users get a grant with the Scheduler role against the /Shared collection.
+	- Full Control	The user can view and edit volumes, networks, and images. They can create containers without any restriction, but can’t see other users’ containers.
+	https://docs.docker.com/datacenter/ucp/2.2/guides/access-control/permission-levels/#roles
 ● Describe the difference between UCP workers and managers
+	UCP components in manager nodes
+	 - ucp-agent: Monitors the node and ensures the right UCP services are running
+	 - ucp-reconcile:	When ucp-agent detects that the node is not running the right UCP components, it starts the ucp-reconcile container to converge the node to its desired state. It is expected for the ucp-reconcile container to remain in an exited state when the node is healthy.
+	 - ucp-auth-api: The centralized service for identity and authentication used by UCP and DTR
+	 - ucp-auth-store:	Stores authentication configurations and data for users, organizations, and teams
+	 - ucp-auth-worker:	Performs scheduled LDAP synchronizations and cleans authentication and authorization data
+	 - ucp-client-root-ca:	A certificate authority to sign client bundles
+	 - ucp-cluster-root-ca:	A certificate authority used for TLS communication between UCP components
+	 - ucp-controller: The UCP web server
+	 - ucp-dsinfo: Docker system information collection script to assist with troubleshooting
+	 - ucp-kv: Used to store the UCP configurations. Don’t use it in your applications, since it’s for internal use only
+	 - ucp-metrics: Used to collect and process metrics for a node, like the disk space available
+	 - ucp-proxy: A TLS proxy. It allows secure access to the local Docker Engine to UCP components
+	 - ucp-swarm-manager: Used to provide backwards-compatibility with Docker Swarm 
+	UCP components in worker nodes
+	 - ucp-agent: Monitors the node and ensures the right UCP services are running
+	 - ucp-dsinfo: Docker system information collection script to assist with troubleshooting
+	 - ucp-reconcile: When ucp-agent detects that the node is not running the right UCP components, it starts the ucp-reconcile container to converge the node to its desired state. It is expected for the ucp-reconcile container to remain in an exited state when the node is healthy.
+	 - ucp-proxy: A TLS proxy. It allows secure access to the local Docker Engine to UCP components
 ● Describe process to use external certificates with UCP and DTR
+	https://docs.docker.com/datacenter/ucp/2.2/guides/admin/configure/use-your-own-tls-certificates/
+	https://docs.docker.com/datacenter/dtr/2.3/guides/admin/configure/use-your-own-tls-certificates/

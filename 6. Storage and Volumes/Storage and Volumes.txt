@@ -1,0 +1,15 @@
+#Storage and Volumes
+● State which graph driver should be used on which OS
+	Linux distribution	Recommended storage drivers	Alternative drivers
+		Docker Engine Community on Ubuntu - overlay2 or aufs (for Ubuntu 14.04 running on kernel 3.13)	overlay¹, devicemapper², zfs, vfs
+		Docker Engine Community on Debian - overlay2 (Debian Stretch), aufs or devicemapper (older versions)	overlay¹, vfs
+		Docker Engine Community on CentOS - overlay2	overlay¹, devicemapper², zfs, vfs
+		Docker Engine Community on Fedora - overlay2	overlay¹, devicemapper², zfs, vfs
+	https://docs.docker.com/storage/storagedriver/select-storage-driver/
+	Overlays usually work on common filesystem types such as EXT4 and XFS whereas snapshotting filesystems only run on volumes formatted for them.
+● Demonstrate how to configure devicemapper
+● Compare object storage to block storage, and explain which one is preferable when available
+● Summarize how an application is composed of layers and where those layers reside on the filesystem
+● Describe how volumes are used with Docker for persistent storage
+● Identify the steps you would take to clean up unused images on a filesystem, also on DTR
+● Demonstrate how storage can be used across cluster nodes
