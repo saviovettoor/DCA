@@ -8,8 +8,77 @@
 	https://docs.docker.com/storage/storagedriver/select-storage-driver/
 	Overlays usually work on common filesystem types such as EXT4 and XFS whereas snapshotting filesystems only run on volumes formatted for them.
 ● Demonstrate how to configure devicemapper
+	sudo vi /etc/docker/daemon.json
+		{
+			"storage-driver":"devicemapper"
+		}
+	service docker restart
+	docker info | grep Storage #to verify
+	NOTE: Make sure you had taken image backups, since when you change the storage driver you will lose all of your current images.
 ● Compare object storage to block storage, and explain which one is preferable when available
+	File System Storage
+	 - Each file is referenced by a filename, and typically has attributes associated with it. 
+	 - Some of the more commonly used file systems include NFS and NTFS. 
+	Block Storage
+	 - block storage stores chunks of data in blocks.A block is identified only by its address.
+	 - A block has no filename, nor does it have any metadata of its own. Blocks only become meaningful when they are combined with other blocks to form a complete piece of data.
+	 - Block storage is commonly used for database applications because of its performance.
+	 - Block storage is also generally used to provide snapshotting capabilities, which allow a volume to be rolled back to a specific point in time, without having to restore a backup.
+	Object Storage
+	 - Rather than referencing data by a block address or a file name, data is stored as an object and is referenced by an object ID.
+	 - advantages of object storage are that it is massively scalable, and allows for a high degree of flexibility with regard to associating attributes with objects.
+	 - disadvantage to using object storage is that it does not perform as well as block storage.Because object storage is designed primarily for scalability, it is a popular choice for public cloud providers.
+	https://rancher.com/block-object-file-storage-containers/
 ● Summarize how an application is composed of layers and where those layers reside on the filesystem
+	#Show the each layers of an image
+		docker image history [OPTIONS] IMAGE
+	Docker’s local storage area, which is usually /var/lib/docker/ on Linux hosts.
+	To examine the layers of an docker image in the filesystem, list the contents of /var/lib/docker/<storage-driver>/layers/.
+	The <missing> lines in the docker history output indicate that those layers were built on another system and are not available locally.
 ● Describe how volumes are used with Docker for persistent storage
+	Volumes have several advantages over bind mounts:
+		Volumes are easier to back up or migrate than bind mounts.
+		You can manage volumes using Docker CLI commands or the Docker API.
+		Volumes work on both Linux and Windows containers.
+		Volumes can be more safely shared among multiple containers.
+		Volume drivers let you store volumes on remote hosts or cloud providers, to encrypt the contents of volumes, or to add other functionality.
+	#Start a container with a volume
+		docker run -d --name devtest --mount source=myvol2,target=/app  nginx:latest 
+	#Use a read-only volume
+		docker run -d --name=nginxtest --mount source=nginx-vol,destination=/usr/share/nginx/html,readonly nginx:latest
+	#Start a service with volumes
+		docker service create -d --replicas=4 --name devtest-service  --mount source=myvol2,target=/app nginx:latest
 ● Identify the steps you would take to clean up unused images on a filesystem, also on DTR
+	you can use docker system prune to clean up multiple types of objects at once.
+	#Prune images
+		docker image prune
+	#To remove all images which are not used by existing containers
+		docker image prune -a
+	#Use filter
+		docker image prune -a --filter "until=24h"
+	#Prune containers
+		docker container prune
+	#Remove stopped containers older than 24 hours
+		docker container prune --filter "until=24h"
+	#Prune volumes
+		docker volume prune
+	#Removes volumes which are not labelled with the keep label
+		docker volume prune --filter "label!=keep"
+	#Prune networks
+		docker network prune
+	#Prune everything
+		docker system prune
+	you are on Docker 17.06.1 or higher and want to also prune volumes, add the --volumes flag:
+		docker system prune --volumes
+	#DTR level
+		Navigate to the Settings page, and choose Garbage collection.
+		First you configure DTR to run a garbage collection job on a fixed schedule. At the scheduled time:
+			DTR becomes read-only. Images can be pulled, but pushes are not allowed.
+			DTR identifies and marks all unused image layers.
+			DTR deletes the marked image layers.
+		Select for how long the garbage collection job should run:
+			Until done: Run the job until all unused image layers are deleted.
+			For x minutes: Only run the garbage collection job for a maximum of x minutes at a time.
+			Never: Never delete unused image layers.
 ● Demonstrate how storage can be used across cluster nodes
+	https://docs.docker.com/engine/extend/legacy_plugins/#volume-plugins
