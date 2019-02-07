@@ -46,10 +46,12 @@
 		docker service rm testweb
 	#List the tasks of one or more services
 		docker service ps testweb
-	#update the number of replicas
+	#Update the number of replicas
 		docker service update --replicas 10 --detach=false  testweb
-	#update replica for multiple replicas(docker service scale)
+	#Update replica for multiple replicas(docker service scale)
 		docker service scale --detach=false testweb=3 testweb1=3
+	#Updated image to the swarm in a staged manner - 2 containers at a time with a 20 second delay in between each batch of 2.
+		docker service update --image httpd:v2 --update-parallelism 2 --update-delay 20s testweb
 	#Set CPU limit(there are limit and reservation)
 		docker service update --limit-cpu=.5 --reserve-cpu=.75 --limit-memory=128m --reserve-memory=256m --detach=false  testweb 
 	#Service in Global mode: Run application on every node
