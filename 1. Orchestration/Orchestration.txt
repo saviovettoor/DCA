@@ -21,6 +21,9 @@
 		docker swarm join-token worker
 	#List out the cluster nodes
 		docker node ls
+	Every join token is comprised of 4 distinct fields separated by dashes (-):
+	PREFIX - VERSION - SWARM ID - TOKEN
+		The prefix is always “SWMTKN”.
 ● State the differences between running a container vs running a service
 	Docker run will start a single container.
 	Docker service manage a group of containers (from the same image). You can scale them (start multiple containers) or update them.
@@ -121,6 +124,8 @@
 		docker node update --label-add node=MyWorkerNode <Node-ID> 
 	#Create a service to a node with label node=MyWorkerNode
 		docker service create --name constraints -p 8082:80 --constraint 'node.labels.node == MyWorkerNode' --replicas 3 httpd
+	#add or update a placement constraint
+		docker service update --constraint-add
 ● Sketch how a Dockerized application communicates with legacy systems
 ● Paraphrase the importance of quorum in a swarm cluster
 	- Swarm manager nodes use the Raft Consensus Algorithm to manage the swarm state.

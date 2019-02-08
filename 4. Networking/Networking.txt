@@ -97,3 +97,5 @@
 			• You are responsible for knowing where all instances are at all times, controlled with ‘mode=host’ in deployment.
 		• Ingress
 			• Since it is responsible for ‘routing mesh’, it makes all published ports available on all hosts (nodes or Workers) participating in the cluster so that the service is accessible from every node regardless of whether there is a service replica running on it at any given time.
+NOTES:
+	Containers can NOT be attached and detached from user-defined networks on the fly

@@ -69,3 +69,57 @@
 ● Describe process to use external certificates with UCP and DTR
 	https://docs.docker.com/datacenter/ucp/2.2/guides/admin/configure/use-your-own-tls-certificates/
 	https://docs.docker.com/datacenter/dtr/2.3/guides/admin/configure/use-your-own-tls-certificates/
+	
+NOTES:
+Linux security technologies
+	Namespaces
+		They let us slice up an operating system (OS) so that it looks and feels like multiple isolated operating systems.
+		eg: You can run multiple web servers, each requiring port 443, on a single OS. To do this you just run each web server app inside of its own network namespace. This works because each network namespace gets its own IP address and full range of ports.
+		
+		You can run multiple applications, each requiring their own particular version of a shared library or configuration file. To do this you run each application inside of its own mount namespace. This works because each mount namespace can have its own isolated copy of any directory on the system (e.g. /etc, /var, /dev etc.)
+		- Docker on Linux currently utilizes the following kernel namespaces:
+			Process ID (pid): Docker uses the pid namespace to provide isolated process trees for each container. Every container gets its own process tree meaning that every container can have its own PID 1.
+			Network (net):  every container gets its own eth0 interface with its own unique IP and range of ports.
+			Filesystem/mount (mnt):  Every container gets its own unique isolated root / filesystem.
+			Inter-process Communication (ipc): Docker uses the ipc namespace for shared memory access within a container.
+			User (user):
+			UTS (uts): Docker uses the uts namespace to provide each container with its own hostname.
+	Control Groups
+		Cgroups let us set limits on each of these so that a single container cannot use all of the CPU, RAM, or storage I/O of the Linux host.
+	Capabilities
+		we need is a technology that lets us pick and choose which root powers our containers need in order to run.
+		Linux root account is made up of a long list of capabilities:
+			CAP_CHOWN - lets you change file ownership.
+			CAP_NET_BIND_SERVICE - lets you bind a socket to low numbered networkports.
+			CAP_SETUID - lets you elevate the privilege level of a process.
+			CAP_SYS_BOOT - lets you reboot the system.
+	Mandatory Access Control
+		Docker works with major Linux MAC technologies such as AppArmor and SELinux.
+	seccomp
+		Docker uses seccomp, in filter mode, to limit the syscalls a container can make to the host’s kernel.
+Docker platform security technologies
+	Swarm Mode
+	Docker Security Scanning
+	Docker Content Trust
+	Docker secrets
+Update the certificate rotation period to 30 days.
+	docker swarm update --cert-expiry 720h
+Manage sensitive data with Docker secrets
+	#Create a secret from a STDIN
+		printf <secret> | docker secret create my_secret -
+	#Create a secret from a file
+		docker secret create my_secret ./secret.json
+	#List out the secrets
+		docker secret ls
+	#Create a secret with labels
+		docker secret create --label env=dev --label rev=20170324 my_secret ./secret.json
+	#Filter using label
+		docker service ls --filter label=env=dev
+	#Display detailed information on one or more secrets
+		docker secret inspect my_secret
+	#Remove one or more secrets
+		docker secret rm my_secret
+	#Using secret in service
+		docker service create --name redis --secret my_secret_data redis:alpine
+	#Remove access to the secret from the running redis service by updating the service.
+		docker service update --secret-rm my_secret_data redis
