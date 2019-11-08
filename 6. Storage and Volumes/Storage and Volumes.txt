@@ -12,19 +12,32 @@
 		{
 			"storage-driver":"devicemapper"
 		}
+	/var/lib/docker/devicemapper/devicemapper/data stores the images
+	loop-lvm mode the default mode for devicemapper, use only for testing. 
+	direct-lvm another mode use for production.
 	service docker restart
+	or 
+	you can edit /usr/lib/systemd/system/docker.service
+		In the line ExecReload= update the line with flag --storage-driver devicemapper
 	docker info | grep Storage #to verify
 	NOTE: Make sure you had taken image backups, since when you change the storage driver you will lose all of your current images.
+	docker run -it --storage-opt size=120G fedora /bin/bash
+	This (size) will allow to set the container rootfs size to 120G at creation time. This option is only available for the devicemapper
+● Demonstrate how to access insecure registry
+	sudo vi /etc/docker/daemon.json
+		{
+			"insecure-registry":["myregistry:5000"]
+		}
 ● Compare object storage to block storage, and explain which one is preferable when available
 	File System Storage
 	 - Each file is referenced by a filename, and typically has attributes associated with it. 
 	 - Some of the more commonly used file systems include NFS and NTFS. 
-	Block Storage
+	Block Storage -devicemapper
 	 - block storage stores chunks of data in blocks.A block is identified only by its address.
 	 - A block has no filename, nor does it have any metadata of its own. Blocks only become meaningful when they are combined with other blocks to form a complete piece of data.
 	 - Block storage is commonly used for database applications because of its performance.
 	 - Block storage is also generally used to provide snapshotting capabilities, which allow a volume to be rolled back to a specific point in time, without having to restore a backup.
-	Object Storage
+	Object Storage 
 	 - Rather than referencing data by a block address or a file name, data is stored as an object and is referenced by an object ID.
 	 - advantages of object storage are that it is massively scalable, and allows for a high degree of flexibility with regard to associating attributes with objects.
 	 - disadvantage to using object storage is that it does not perform as well as block storage.Because object storage is designed primarily for scalability, it is a popular choice for public cloud providers.
@@ -48,11 +61,22 @@
 		docker run -d --name=nginxtest --mount source=nginx-vol,destination=/usr/share/nginx/html,readonly nginx:latest
 	#Start a service with volumes
 		docker service create -d --replicas=4 --name devtest-service  --mount source=myvol2,target=/app nginx:latest
+	# Two types of mount bind and volume. bind stick to the host, Volume are portable
+		docker run --mount type=bind,source=/home/cloud_user/message,destination=/root,readonly busybox cat /root/message.txt
+		docker run --mount type=volume,source=my-volume,destination=/root busybox sh -c 'echo hello > /root/message.txt && cat /root/message.txt'
+		when using --mount to bind-mount a file or directory that does not yet exist on the Docker host,docker wont automatically create it for you, but generates an error.
+	When we create the volume at that time we define the driver using --driver tag, 	and when we define/run the container which create the volume at that time define the driver using --volume-driver.
+	tmpfs mounts
+		If you’re running Docker on Linux, you have a third option: tmpfs mounts. When you create a container with a tmpfs mount, the container can create files outside the container’s writable layer and can only be used with standalone containers.
+		tmpfs mount is temporary, and only persisted in the host memory.When the container stops, the tmpfs mount is removed, and files written there won’t be persisted.
+		There is no source for tmpfs mounts.
+		docker run -d -it --name tmptest --mount type=tmpfs,destination=/app nginx:latest
+	
 ● Identify the steps you would take to clean up unused images on a filesystem, also on DTR
 	you can use docker system prune to clean up multiple types of objects at once.
 	#Prune images
-		docker image prune
-	#To remove all images which are not used by existing containers
+		docker image prune # remove images which dont have a tag and are not refferenced by other images
+	#To remove all images which are not referenced by containers
 		docker image prune -a
 	#Use filter
 		docker image prune -a --filter "until=24h"
@@ -82,3 +106,17 @@
 			Never: Never delete unused image layers.
 ● Demonstrate how storage can be used across cluster nodes
 	https://docs.docker.com/engine/extend/legacy_plugins/#volume-plugins
+* Immutable Tags in DTR
+	By default, users with R/W access can overwrite tags.
+	To privent tags from overwritten, we can configure repository to be immutable.
+		Go to the repo -> Settings -> Immutablility -> turn on
+NOTES:
+	In bind mount CONSISTENCY option have three mode :	
+		consistent, delegated, or cached.
+		--> This CONSISTENCY optionn can be applied to only Docker Desktop for Mac.
+	The bind-propagation option, if present, changes the bind propagation. May be one of rprivate, private, rshared, shared, rslave, slave.
+	If you use selinux you can add the z or Z options to modify the selinux label of the host file or directory being mounted into the container.
+		z : z option indicates that the bind mount content is shared among multiple containers.
+		Z :  option indicates that the bind mount content is private and unshared.
+	Block-level storage drivers such as devicemapper, btrfs, and zfs
+	overlay2, aufs, and overlay all operate at the file level rather than the block level. 
