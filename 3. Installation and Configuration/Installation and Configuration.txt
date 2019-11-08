@@ -7,34 +7,51 @@
 		yum update -y
 		yum install docker-ce -y
 		systemctl enable docker && systemctl start docker
-		
+	 You can configure the Docker daemon to use a different directory, using the data-root configuration option.	
 Make another user to run docker
 	/var/run/docker.sock
 	#adding the user to docker group
-	usermod -aG docker <user>
-	Then logout and login
+		usermod -aG docker <user>
+		Then logout and login
 ● Configure logging drivers (splunk, journald, etc)
-	Change docker default logging(json-file)
+	#Different logging drivers
+		None	No logs are available for the container and docker logs does not return any output.
+		json-file The logs are formatted as JSON. The default logging driver for Docker.
+		syslog	Writes logging messages to the syslog facility. The syslog daemon must be running on the host machine.
+		journald Writes log messages to journald. The journald daemon must be running on the host machine.
+	#To check current default Logging driver
+		docker info --format '{{.LoggingDriver}}'
+	#Change docker default logging(json)
 		docker image pull httpd
 		docker container run -d --name testweb httpd
 		docker container inspect testweb | grep IPAddr
 		docker logs testweb #to view the log now its in json format
 	#Changing loging to rsyslog
-	vi /etc/rsyslog.config
-		#uncommant below lines
-		$ModLoad imudp
-		$UDPServerRun 514
-	systemctl restart rsyslog
-	
-	vi /etc/docker/daemon.json
+		vi /etc/rsyslog.config
+			#uncommant below lines
+			$ModLoad imudp
+			$UDPServerRun 514
+		systemctl restart rsyslog
+		
+		vi /etc/docker/daemon.json
+			{
+				"log-driver": "syslog",
+				"log-opts": {
+					"syslog-address": "udp://LOCALIP:514"
+					}
+			}
+		systemctl restart docker
+		now you can check /var/log/messages to view the logs
+	#Change the log driver on container start time
+		docker container run -d --name testjson --log-driver json-file httpd
+	#Enable debug logging
+		vi /etc/docker/daemon.json
 		{
-			"log-driver": "syslog",
-			"log-opts": {
-				"syslog-address": "udp://LOCALIP:514"
-				}
+			"debug": true
 		}
-	systemctl restart docker
-	now you can check /var/log/messages to view the logs
+		Differnt log-level types in doemon.jason are --- debug, info, warn, error, fatal.
+		Send a SIGHUP signal to the Docker daemon, triggering it to reload its configuration without restarting the process.
+			kill -SIGHUP $(pidof dockerd)
 ● Setup swarm, configure managers, add nodes, and setup backup schedule
 	Backup
 	 You can back up the swarm using any manager. Use the following procedure.
@@ -66,6 +83,16 @@ Make another user to run docker
 	DTR
 	 4GB RAM
 	 20-30GB DISK
+● DTR Supported storage systems:
+	Local filesystem
+		NFS
+		Bind Mount
+		Volume
+	Cloud Storage Providers
+		Amazon S3
+		Microsoft Azure Blob Storage
+		OpenStack Swift for object storage.
+		Google Cloud Storage for object storage.
 ● Understand namespaces, cgroups, and configuration of certificates
 	Namespace
 		When you run a container, Docker creates a set of namespaces for that container.
@@ -77,9 +104,7 @@ Make another user to run docker
 			The mnt namespace: Managing filesystem mount points (MNT: Mount).
 			The uts namespace: Isolating kernel and version identifiers. (UTS: Unix Timesharing System).
 	Control groups
-		A cgroup limits an application to a specific set of resources. Control groups allow Docker Engine to share available hardware resources to containers and optionally enforce limits and constraints. For example, you can limit the memory available to a specific container.
-	
-	
+		A cgroup limits an application to a specific set of resources. Control groups allow Docker Engine to share available hardware resources to containers and optionally enforce limits and constraints. For example, you can limit the memory available to a specific container.	
 ● Use certificate-based client-server authentication to ensure a Docker daemon has the rights to access images on a registry
 	A custom certificate is configured by creating a directory under /etc/docker/certs.d using the same name as the registry’s hostname.
 	The following illustrates a configuration with custom certificates:
@@ -89,18 +114,82 @@ Make another user to run docker
        ├── client.key           <-- Client key
        └── ca.crt               <-- Certificate authority that signed
                                     the registry certificate
+	curl --insecure -u "test:passward" https://myregistrydomain:5000/v2/_catalog --> to listout the images.
+	curl --insecure -u "test:passward" https://myregistrydomain:5000/v2/mybusybox/tags/list --> list all tags for image busybox
+	curl --insecure -u "test:passward" https://myregistrydomain:5000/v2/mybusybox/manifest --> detail of image
 ● Consistently repeat steps to deploy Docker engine, UCP, and DTR on AWS and on premises in an HA config
+	#UCP Installation
+		docker container run --rm -it --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:2.2.5 install --interactive
+		or 
+		docker container run --rm -it --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:3.1.4 install --host-address 139.59.82.72 --force-minimums		
 ● Complete configuration of backups for UCP and DTR
-	UDCP BACKUP
+	#UCP BACKUP
+		Backup will stop the UCP
 	#get the id
-		UCP-SRVR]#docker container run --log-driver none --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp backup > backup.tar
-		UCP-SRVR]#docker container run --log-driver none --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp backup --id <ID> > backup.tar
-	UDCP RESTORE:
-		UCP-SRVR]#docker container run --log-driver none --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp restore --id <ID> < backup.tar
-	DTR BACKUP	
-		docker run -i --rm docker/dtr backup --ucp-insecure-tls --ucp-url https://<url> --ucp-username <user> --ucp-password <password> > dtr-backup.tar
+		UCP-SRVR]#docker container run --rm --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:3.1.5 id
+		UCP-SRVR]#docker container run --log-driver none --rm --interactive --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:3.1.5 backup --passphrase "secretsecret" --id <Your UCP instance ID> > backup.tar   ##--passphrase to encrypt the backup
+		List the contents of the backup file.
+			gpg --decrypt /home/cloud_user/ucp-backup.tar | tar --list
+	#Uninstall UCP:
+		docker container run --rm -it -v /var/run/docker.sock:/var/run/docker.sock --name ucp docker/ucp:3.1.5 uninstall-ucp --interactive
+	#UDCP RESTORE:
+		UCP-SRVR]#docker container run --rm -i --name ucp -v /var/run/docker.sock:/var/run/docker.sock docker/ucp:3.1.5 restore --passphrase "secretsecret" < ucp-backup.tar
+	#Install DTR
+		docker run -it --rm docker/dtr install --dtr-external-url dtr.mydns.com --ucp-node dtr1 --ucp-url https://34.252.195.122 --ucp-username admin --ucp-insecure-tls
+			Where the --ucp-node is the hostname of the UCP node where you want to deploy DTR. --ucp-insecure-tls tells the installer to trust the certificates used by UCP
+	#DTR BACKUP
+		#Get the ID
+			docker volume ls # Check for dtr-registry-<ID>
+		#DTR Backup
+			docker run -i --rm docker/dtr backup --ucp-insecure-tls --ucp-url https://<url> --ucp-username <user> --ucp-password <password> > dtr-backup.tar
+			Command backups of configuration and image metadata.
+			This doesnot backup Users, Organizations and Docker images in registry. Users and Organizations can be backuped up during a UCP backup. 
+	
+		#Back up the registry images.
+			sudo tar -zvcf dtr-backup-images.tar $(dirname $(docker volume inspect --format '{{.Mountpoint}}' dtr-registry-<replica-id>))
+			read -sp 'ucp password: ' UCP_PASSWORD; docker run --log-driver none -i --rm --env UCP_PASSWORD=$UCP_PASSWORD docker/dtr:2.6.6 backup --ucp-url https://<UCP Manager Private IP> --ucp-insecure-tls --ucp-username admin --existing-replica-id <replica-id> > dtr-backup-metadata.tar
+			
 	DTR RESTORE
-		docker run -i --rm docker/dtr restore --ucp-insecure-tls --ucp-url https://<url> --ucp-username <user> --ucp-password <password> < dtr-backup.tar
+		#Stop existing replicas
+			docker run -it --rm docker/dtr:2.6.6 destroy --ucp-insecure-tls --ucp-username admin --ucp-url https://<UCP Manager Private IP>
+			https://success.docker.com/article/extra-dtr-listed-in-ucp-31x-requiring-removal
+		Restore images.
+			tar -xzf dtr-backup-images.tar -C /var/lib/docker/volumes
+		Restore DTR metadata.
+			read -sp 'ucp password: ' UCP_PASSWORD; docker run -i --rm --env UCP_PASSWORD=$UCP_PASSWORD docker/dtr:2.6.6 restore --dtr-use-default-storage --ucp-url https://<UCP Manager Private IP> --ucp-insecure-tls --ucp-username admin --ucp-node <hostname> --replica-id <replica-id> --dtr-external-url <dtr-external-url> < dtr-backup-metadata.tar
+		
+		{ docker run -i --rm docker/dtr restore --ucp-insecure-tls --ucp-url https://<url> --ucp-username <user> --ucp-password <password> < dtr-backup.tar }
 ● Configure the Docker daemon to start on boot
 	#Start docker daemon on boot
 		systemctl enable docker
+Activate Enterprise Edition
+	docker engine activate
+UCP Components
+	UCP Components (Manager)
+	------------------------
+	ucp-agent			-	Monitors the node and ensures the right UCP services are running.
+	ucp-reconcile		-	When the agent detects the node is not running correct components, it has the container convert to the desired state.
+	ucp-auth-api		-	Centralized service for identity and authentication used by UCP and DTR.
+	ucp-auth-store		-	Stores authentication configurations and data for users, organizations, and teams.
+	ucp-auth-worker		-	Performs scheduled LDAP sync (when configured) and cleans authentication and authorization data.
+	ucp-client-root-ca	-	Certificate authority to sign client bundles.
+	ucp-cluster-root-ca -	Certificate authority used for TLS communication between UCP components.
+	ucp-controller 		-	UCP Web Server.
+	ucp-dsinfo 			-	Docker system information collection script to assist with troubleshooting.
+	ucp-kv 				-	Used to store the UCP configurations (internal use only).
+	ucp-metrics			-	Used to collect and process metrics for a node (i.e. disk available).
+	ucp-proxy			-	A TLS proxy that allows the local Docker Engine secure access to the UCP components.
+	ucp-swarm-manager	-	Used to provide backwards-compatibility with Docker Swarm.
+	
+	UCP Components (Workers)
+	------------------------
+	ucp-agent		-	Monitors the node and ensures the right UCP services are running.
+	ucp-dsinfo		-	Docker system information collection script that assists with troubleshooting.
+	ucp-reconcile 	-	When the agent detects the node is not running correct components, it has the container convert to the desired state.
+	ucp-proxy 		- 	A TLS proxy that allows the local Docker Engine secure access to the UCP components.
+Communication between the Docker Engine, UCP, and DTR can happen:
+	• Over TCP/UDP – depends on the port and whether a response is required or if the message is a notification.
+	• IPC – services on the same node can use IPC to communicate amongst each other.
+	• API – will take place over TCP (of course), but uses the API directly to query and update the components across the entire cluster.
+
+
