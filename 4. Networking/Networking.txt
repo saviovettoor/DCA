@@ -1,4 +1,10 @@
 #Networking (15% of exam)
+	Docker uses an archicture called Container Network Model (CNM) to manage networking for Docker containers.
+	CNM Uses Network Driver and IPAM Driver Concepts.(https://success.docker.com/article/networking/)
+	Following is objects of The Container Network Model
+		Sandbox
+		Endpoint
+		Network Controller
 ● Network Driver Types
 	Bridge
 		• Simple to understand, use and troubleshoot, and is the default on stand-alone Docker hosts.
@@ -13,11 +19,22 @@
 		• Sometimes referred to as ‘Host Only Networking’.
 		• Only accessible via the underlying host.
 		• Access to services can only be provided by exposing container service ports to the host system.
+		• Host network remove isolation between host network and container.
 	Overlay
 		• Allows communication among all Docker Daemons that are participating in a Swarm.
 		• It is a ‘Swarm Scope’ driver in that it extends itself (building previously non-existent networks on Workers if needed) to all daemons in the Swarm cluster.
 		• Allows the communication of multiple services that may have replicas running on any number of Workers in the Swarm, regardless of their origination or destination.
 		• Default mode of Swarm communication.
+		• Uses a VXLAN data plane, which allows the underlying network infrastructure to route data between hosts.
+		You need the following ports open to traffic to and from each Docker host participating on an overlay network:
+			TCP port 2377 for cluster management communications
+			TCP and UDP port 7946 for communication among nodes
+			UDP port 4789 for overlay network traffic
+	When you initialize a swarm  two new networks are created on that Docker host:
+		- An overlay network called ingress
+			which handles control and data traffic related to swarm services
+		- A bridge network called docker_gwbridge
+			which connects the individual Docker daemon to the other daemons participating in the swarm.
 	Ingress
 		• Special overlay network that load balances network traffic amongst a given service’s working nodes.
 		• Maintains a list of all IP addresses from nodes that participate in that service (using the IPVS module) and when a request comes in, routes to one of them for the indicated service.
@@ -28,6 +45,7 @@
 		• Automatically created when a Swarm is initialized or joined.
 	macvlan: 
 		Macvlan networks allow you to assign a MAC address to a container, making it appear as a physical device on your network. The Docker daemon routes traffic to containers by their MAC addresses. Using the macvlan driver is sometimes the best choice when dealing with legacy applications that expect to be directly connected to the physical network, rather than routed through the Docker host’s network stack. 
+		When you create a macvlan network, it can either be in bridge mode or 802.1q trunk bridge mode.
 ● Create a Docker bridge network for a developer to use for their containers
 		#List out network
 			docker network ls
@@ -43,10 +61,17 @@
 			docker network connect --ip=192.168.1.10 my_bridge testweb 
 		#Disconnect the default network
 			docker network disconnect bridge testweb
+		#Connet a running container to user-defined bridge network
+			docker network connect <network_name> <container_name>
+		#Diconnet a running container to user-defined bridge network
+			docker network disconnect <network_name> <container_name>
 		#Add the service to new network
 			 docker run -d --name testweb -p 80:80 --network my_bridge httpd
+		When you create a swarm service it connects to the ingress network by default.
+		When you start a container you can connect to only one network, but you can attach to multiple containers later.
 ● Troubleshoot container and engine logs to understand a connectivity issue betweencontainers
-	https://docs.docker.com/docker-for-windows/troubleshoot/
+	#If the daemon is unresponsive, you can force a full stack trace to be logged by sending a SIGUSR1 signal to the daemon.
+		sudo kill -SIGUSR1 $(pidof dockerd)
 ● Publish a port so that an application is accessible externally
 	Docker level
 		docker run -d --name=myweb -P nginx:latest #exposeing port to host machine based on expose which is mentioned in dockerfile
@@ -55,6 +80,7 @@
 		docker run -d --name=myweb -p 127.0.0.1:8080:80/udp nginx:latest #bind to specific local interface 127.0.0.1:8080 not other
 	Docker Swarm
 		docker service create --name my_web --replicas 3 --publish 8080:80 nginx
+	All swarm service management traffic is encrypted by default, using the AES algorithm in GCM mode.  
 ● Identify which IP and port a container is externally accessible on
 	#List out the running containers
 		docker ps
@@ -73,12 +99,16 @@
 	- we can veryfy the same by checking resolve.conf file of container
 	#Set a dns for container	
 		docker run -d --name testweb --dns=8.8.8.8 --dns=8.8.4.4 httpd 
-	Set a custom dns when a container start
+	#Set a custom dns when a container start
 		vi /etc/docker/daemon.json
 			{
 				"dns":["8.8.8.8","8.8.4.4"]
 			}
 		systemctl restart docker
+	#DNS options
+		--dns-search	
+		--dns
+		--dns-port
 ● Use Docker to load balance HTTP/HTTPs traffic to an application (Configure L7 load balancing with Docker EE)
 ● Understand and describe the types of traffic that flow between the Docker engine, registry, and UCP controllers
 	The traffic between DTR and UCP is always encrypted to ensure security. Traffic between containers is not encrypted by default. DTR / UCP management traffic used Mutual TLS
@@ -89,6 +119,18 @@
 		docker network inspect myoverlay0
 	#Create service on overlay network you created
 		docker service create --name testweb -p 80:80 --network=myoverlay0 --replicas 3 httpd
+	#Connect an existing service to an overlay network 
+		docker service update --network-add my-network testweb
+	#Disconnect a running service from a network
+		docker service update --network-rm my-network testweb
+	#Create an encrypted overlay network
+		docker network create -d overlay --opt encrypted encrypted_overlay
+	 Application data is not incrypted by default. To encrypt application data as well, add --opt encrypted.
+	# To create an overlay network which can be used by swarm services or standalone containers to communicate with other standalone containers running on other Docker daemons, add the --attachable flag:
+		docker network create -d overlay --attachable my-attachable-overlay
+	Following Modes can be used for service discovery of Swarm service:
+		Virtual IP (VIP) mod---(With routing Mode).
+		DNS Round Robin (DNSRR) mode---(Without routing Mode)
 ● Describe the difference between "host" and "ingress" port publishing mode
 	Two types of port publishing modes:
 		• Host
@@ -97,5 +139,16 @@
 			• You are responsible for knowing where all instances are at all times, controlled with ‘mode=host’ in deployment.
 		• Ingress
 			• Since it is responsible for ‘routing mesh’, it makes all published ports available on all hosts (nodes or Workers) participating in the cluster so that the service is accessible from every node regardless of whether there is a service replica running on it at any given time.
+	To bypass the routing mesh, you can start a service using DNS Round Robin (DNSRR) mode, by setting the --endpoint-mode flag to dnsrr
 NOTES:
 	Containers can NOT be attached and detached from user-defined networks on the fly
+	IPv6 networking is only supported on Docker daemons running on Linux hosts.
+	One feature that user-defined networks do not support that you can do with --link is sharing environmental variables between containers.
+	Docker swarm mode stores networking information in the Raft logs on the swarm managers. 
+	
+● Differences between user-defined bridges and the default bridge
+	User-defined bridges provide better isolation and interoperability between containerized applications.
+	User-defined bridges provide automatic DNS resolution between containers.
+	Containers can be attached and detached from user-defined networks on the fly.(To remove a container from the default bridge network, you need to stop the container and recreate it with different network options.)
+	Each user-defined network creates a configurable bridge.
+	Linked containers on the default bridge network share environment variables.
