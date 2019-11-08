@@ -13,8 +13,12 @@
 	Then logout and login
    Docker Swarm Cluster Setup
 	#Intiate swarm cluster
-		master]#docker swarm init --advertise-addr <LocalIP>
+		master]#docker swarm init --advertise-addr <LocalIP> --listen-addr <LocalIP>:2377
+			--advertise-addr is the IP and port that other nodes should use to connect to this manager.
+			--listen-addr The node listens for inbound swarm manager traffic on this address. The default is to listen on 0.0.0.0:2377.
 		worker]#docker swarm join --token <WorkerToken> <LocalIP>:2377	
+		By default Docker Swarm uses a default address pool 10.0.0.0/8 for global scope (overlay) networks.
+		To configure custom default address pools, you must define pools at Swarm initialization using the --default-addr-pool.
 	#Lost manager token? 
 		docker swarm join-token manager
 	#Lost worker token? 
@@ -24,6 +28,14 @@
 	Every join token is comprised of 4 distinct fields separated by dashes (-):
 	PREFIX - VERSION - SWARM ID - TOKEN
 		The prefix is always “SWMTKN”.
+	#Worker to Manager
+		docker node promote [node-name]
+			or
+		docker node update --role manager [node-name]
+	#Manager to Worker
+		docker node demote [node-name]
+			or
+		docker node update --role worker [node-name]
 ● State the differences between running a container vs running a service
 	Docker run will start a single container.
 	Docker service manage a group of containers (from the same image). You can scale them (start multiple containers) or update them.
@@ -40,15 +52,21 @@
 		docker swarm update --autolock=false
 	#Update the key	
 		docker swarm unlock-key --rotate
+	NOTE: Once you restart the docker swarm swarm need key but not docker commands
 ● Extend the instructions to run individual containers into running services under swarm
+	Each task has a life cycle, with states like NEW, PENDING, and COMPLETE.
 	#Create a service name testweb using image httpd
 		docker service create --name testweb -p 80:80 httpd
 	#Listout the services in the cluster
 		 docker service ls
 	#Remove service testweb
 		docker service rm testweb
+			or
+		docker service remove testweb
 	#List the tasks of one or more services
 		docker service ps testweb
+	#Check the logs of a service 
+		docker service logs <service_name>
 	#Update the number of replicas
 		docker service update --replicas 10 --detach=false  testweb
 	#Update replica for multiple replicas(docker service scale)
@@ -57,15 +75,61 @@
 		docker service update --image httpd:v2 --update-parallelism 2 --update-delay 20s testweb
 	#Set CPU limit(there are limit and reservation)
 		docker service update --limit-cpu=.5 --reserve-cpu=.75 --limit-memory=128m --reserve-memory=256m --detach=false  testweb 
+		docker container run -dt --name constraint01 --cpus=1.5 busybox sh
+		docker container run -dt --name constraint02 --cpuset-cpus=0,1 busybox sh
+		--limit-memory ->Soft limit 
+		--reserve-memory ->Hard limit Remory
+		--limit-cpu -> Soft limit CPU
+		--reserve-cpu -> hardlimit CPU
+		-m -> hardlimit		
 	#Service in Global mode: Run application on every node
-		docker service --name myweb -p 80:80 --mode global --detach=false nginx 
+		docker service --name myweb -p 80:80 --mode global --detach=false nginx
+	#Run service in host mode: where you will able to access the app only in the node where its running
+		docker service create --name nginx-svc --network my-net --publish published=80,target=80,mode=host --replicas 12 nginx
+	# Use a template to pass the node hostname to each container as an environment variable.
+		docker service create --name node-hostname --replicas 3 --env NODE_HOSTNAME="{{.Node.Hostname}}" nginx
+	#Rolling update and rollback
+		To set up a service for automatic rollback, use --update-failure-action=rollback
+		Action on update failure (“pause”|”continue”|”rollback”)
+		docker service update --rollback --update-delay=0s --update-failure-action=rollback web
+	#Update a docker service to publish port
+		docker service update --publish-add 80 my_web
 ● Interpret the output of "docker inspect" commands
 		docker service inspect --pretty <SERVICE-ID>
 	# Without --pretty result will be in json
 		docker image inspect <ImageName/ID>
 ● Convert an application deployment into a stack file using a YAML compose file with "docker stack deploy"
+	vi simple-stack.yml
+		version: '3'
+		services:
+			web:
+				image: nginx
+				ports:
+				- "8080:80"
+				deploy:
+					replicas: 3
+		    busybox:
+			  image: radial/busyboxplus:curl
+			  command: /bin/sh -c "while true; do echo $MESSAGE; curl web:80; sleep 10; done"
+			  environment:
+			  - MESSAGE=Hello!
 	#Create a service in docker swarm using docker-compose file
 		docker stack deploy --compose-file docker-compose.yml mycustome-stack
+		docker stack deploy -c simple-stack.yml simple
+		docker stack ls
+		docker stack ps simple
+		docker stack services simple
+		docker service logs simple_busybox
+	#Delete the stack
+		docker stack rm simple
+	#Docker-compose 	
+		File-name: docker-compose.yml
+		docker-compose up -d
+		docker-compose down
+		docker-compose stop
+		docker-compose restart 
+		docker-compose ps
+		docker-compose top #list the processes running inside of each service (container).
 ● Manipulate a running stack of services
 	#Deploy a new stack or update an existing stack
 		docker stack deploy	
@@ -77,6 +141,8 @@
 		docker stack rm
 	#List the services in the stack
 		docker stack services
+	#Update the command an existing service runs
+		docker service update --args "ping docker.com" helloworld
 ● Increase # of replicas
 	#update the number of replicas
 		docker service update --replicas 10 --detach=false  testweb
@@ -93,7 +159,7 @@
 		#When you create a service it will be assigned to default bridge network
 			docker run -d --name testweb -p 80:80 httpd 
 		#Get IP of the container
-			docker container inspect --format="{{.NeteorkSettings.Networks.bridge.IPAddress}}" testweb
+			docker container inspect --format="{{.NeteworkSettings.Networks.bridge.IPAddress}}" testweb
 		#Now testweb will be having two ips in two diff network
 			docker network connect --ip=192.168.1.10 my_bridge testweb
 		#Disconnect the default network
@@ -110,30 +176,44 @@
 		docker run -d --mount type=bind,src=/my/webfiles,target=/usr/local/apache2/htdocs httpd
 ● Illustrate running a replicated vs global service
 	#Service in Global mode: Run application on every node
-		docker service --name myweb -p 80:80 --mode global --detach=false nginx 
+		docker service --name myweb -p 80:80 --mode global --detach=false nginx
+	#Service in Global mode: Using publish
+		docker service create --mode global --publish mode=host,target=80,published=8080 --name=nginx nginx:latest
+	NOTE: You cant use scale/relicas for global mod.
+		  You cant update a task/service MODE. (global mode to replicated mode and viseversa)
 ● Identify the steps needed to troubleshoot a service not deploying
-	- May all nodes are paused or drained,
+	- May all nodes are paused or drained
 	- we can reserve a specific amount of memory for a service.If no node in the swarm has the required amount of memory, the service remains in a pending state
 	- Checking the logs
+	- Check the constraint is anything specificied in service by looking, docker service inspect <service_name> --pretty
+	docker node update --availability drain worker1 #to drain a node that had a task
+	docker node update --availability active worker1 #to return the drained node to an active state
+	
 ● Apply node labels to demonstrate placement of tasks
 	#To check the node label
 		docker node inspect --format="{{.Spec.Labels}}" <Node-ID>
+		docker node inspect --format="{{json .Spec.Labels}}" <Node-ID> #with key and value
 			or
 		docker node inspect --pretty <Node-ID>
 	#Set a label node=MyWorkerNode to a node
-		docker node update --label-add node=MyWorkerNode <Node-ID> 
+		docker node update --label-add node=MyWorkerNode <Node-ID/Node-name> 
 	#Create a service to a node with label node=MyWorkerNode
 		docker service create --name constraints -p 8082:80 --constraint 'node.labels.node == MyWorkerNode' --replicas 3 httpd
+	#you can have multiple constraint also
+		docker service create --name my-nginx --mode global --constraint node.labels.region==east --constraint node.labels.type!=devel nginx
 	#add or update a placement constraint
 		docker service update --constraint-add
+	# spread tasks evenly based on the value of a specific label #--placement-pref with a spread strategy (currently the only supported strategy) to spread tasks
+		The following example sets a preference to spread the deployment across nodes based on the value of the datacenter label. If some nodes have datacenter=us-east and others have datacenter=us-west, the service is deployed as evenly as possible across the two sets of nodes.Placement preferences are ignored for global services.
+		docker service create --replicas 9 --name redis_2 --placement-pref 'spread=node.labels.datacenter' redis:3.0.6
 ● Sketch how a Dockerized application communicates with legacy systems
 ● Paraphrase the importance of quorum in a swarm cluster
 	- Swarm manager nodes use the Raft Consensus Algorithm to manage the swarm state.
 	- Additional manager nodes reduce write performance because more nodes must acknowledge proposals to update the swarm state. 
-	- Raft tolerates up to (N-1)/2 failures and requires a majority or quorum of (N/2)+1 members to agree on values proposed to the cluster. 
+	- Raft tolerates up to (N-1)/2 failures and requires a majority or quorum of (N/2)+1 members to agree on values proposed to the cluster. where N = total number of manager nodes in swarm cluster.
 ● Demonstrate the usage of templates with "docker service create"
-	docker service create --name hosttempl --hostname="{{.Node.ID}}-{{.Service.Name}}" httpd
-	The supported flags are the following :
+	docker service create --name hosttempl --hostname="{{.Node.Hostname}}-{{.Service.Name}}" httpd
+	The supported flags for place holder are the following :
 		--hostname
 		--mount
 		--env
@@ -147,3 +227,13 @@
 	.Task.ID		Task ID
 	.Task.Name		Task name
 	.Task.Slot		Task slot
+
+Quorum
+------
+	A Quorum is the majority (morethan half )of managers in a swarm. eg: a swarm with 5 managers have quorum 3 (N+1)/2.
+● Configure the runtime environment
+	You can configure the following options for the runtime environment in the container:
+		environment variables using the --env flag
+		the working directory inside the container using the --workdir flag
+		the username or UID using the --user flag
+	docker service create --name helloworld --env MYVAR=myvalue --workdir /tmp --user my_user alpine ping docker.com
