@@ -10,6 +10,7 @@
 	To sign an image, you can run:
 		export DOCKER_CONTENT_TRUST=1
 	Mutual Transport Layer Security, or MTLS, is used to secure communications between the manager and nodes in a Docker Swarm cluster.
+	In an environment where DOCKER_CONTENT_TRUST is set, you can use the --disable-content-trust flag to run individual operations on tagged images without content trust on an as-needed basis.
 ● Configure RBAC in UCP
 	https://blog.docker.com/2016/03/role-based-access-control-docker-ucp-tutorial/
 	Levels of Permissions
@@ -108,7 +109,7 @@ Manage sensitive data with Docker secrets
 	#Create a secret from a STDIN
 		printf <secret> | docker secret create my_secret -
 	#Create a secret from a file
-		docker secret create my_secret ./secret.json
+		docker secret create my_secret secret.txt
 	#List out the secrets
 		docker secret ls
 	#Create a secret with labels
@@ -123,3 +124,24 @@ Manage sensitive data with Docker secrets
 		docker service create --name redis --secret my_secret_data redis:alpine
 	#Remove access to the secret from the running redis service by updating the service.
 		docker service update --secret-rm my_secret_data redis
+	#Update service with new secret
+		docker service update --secret-add source=ssh-2,target=ssh-2 --secret-rm ssh-1 myservice	
+	Secret location in container
+		/run/secret/<secret-name>
+	NOTE: You cannot update or rename a secret, but you can revoke a secret and grant access to it using a new target filename. 
+	Internally, swarm services use tmpfs mounts to mount secrets into a service’s containers.
+	
+How to create Docker Content Trust
+--------------------
+Creating Delegation Key:
+	docker trust key generate [NAME]
+Importing a Key:
+	docker trust key load [PEM] --name [NAME]
+Add a signer:
+	docker trust signer add --key [PEM] [NAME] [REPOSITORY]
+Remove a signer:
+	docker trust signer remove [NAME] [REPOSITORY]
+Signing an image:
+	docker trust sign [IMAGE]:[TAG]
+Check the image on content trust
+	docker trust inspect <image-name> 
